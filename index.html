@@ -14,47 +14,76 @@
 <body>
     <div id="map"></div>
 
-    <!-- استدعاء مكتبة Leaflet الأساسية -->
+    <!-- 1. استدعاء مكتبة Leaflet الأساسية -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- استدعاء مكتبة قراءة ملفات KMZ و KML -->
+    <!-- 2. استدعاء مكتبة قراءة ملفات KMZ -->
     <script src="https://unpkg.com/leaflet-kmz@latest/dist/leaflet-kmz.js"></script>
 
+    <!-- 3. استدعاء مكتبة Omnivore المتخصصة في قراءة ملفات KML -->
+    <script src="https://unpkg.com/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
+
     <script>
-        // 1. إعداد الخريطة والمركز الافتراضي (مكة المكرمة)
+        // إعداد الخريطة والمركز الافتراضي (مكة المكرمة)
         var map = L.map('map').setView([21.4225, 39.8261], 12);
 
-        // 2. إضافة طبقة الأقمار الصناعية المجانية (Esri World Imagery) - لا تحتاج API Key
+        // إضافة طبقة الأقمار الصناعية المجانية (Esri World Imagery)
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri'
         }).addTo(map);
 
-        // 3. قراءة اسم الملف من متغيرات الرابط
+        // قراءة اسم الملف من متغيرات الرابط
         var urlParams = new URLSearchParams(window.location.search);
         var fileName = urlParams.get('file');
 
         if (fileName) {
-            // تجميع الرابط الكامل للملف (يدعم KML و KMZ)
+            // الرابط الكامل للملف
             var fileUrl = "https://euroconsult119-lab.github.io/out-kmz/" + fileName;
 
-            // 4. إعداد طبقة العرض (تدعم كلاً من KML و KMZ تلقائياً)
-            var geoLayer = L.kmzLayer().addTo(map);
-            
-            geoLayer.on('load', function(e) {
-                var bounds = e.layer.getBounds();
-                if (bounds && bounds.isValid()) {
-                    // عمل Zoom تلقائي على حدود المشروع بمجرد تحميله
-                    map.fitBounds(bounds);
-                }
-            });
+            // تحويل اسم الملف لحروف صغيرة لمعرفة الامتداد بدقة
+            var lowerFileName = fileName.toLowerCase();
 
-            // إضافة تنبيه في حال حدوث خطأ في تحميل الملف
-            geoLayer.on('error', function(e) {
-                console.error('حدث خطأ أثناء تحميل الملف:', e);
-            });
-            
-            // تنفيذ التحميل (سواء كان الملف .kml أو .kmz)
-            geoLayer.load(fileUrl);
+            // ==========================================
+            // الحالة الأولى: إذا كان الملف بصيغة KML
+            // ==========================================
+            if (lowerFileName.endsWith('.kml')) {
+                var kmlLayer = omnivore.kml(fileUrl)
+                    .on('ready', function() {
+                        // عمل Zoom تلقائي على حدود المشروع بعد تحميله
+                        map.fitBounds(kmlLayer.getBounds());
+                    })
+                    .on('error', function(e) {
+                        console.error('حدث خطأ أثناء تحميل ملف KML:', e);
+                        alert('تعذر تحميل ملف KML. تأكد من صحة الرابط أو اسم الملف.');
+                    })
+                    .addTo(map);
+            } 
+            // ==========================================
+            // الحالة الثانية: إذا كان الملف بصيغة KMZ
+            // ==========================================
+            else if (lowerFileName.endsWith('.kmz')) {
+                var kmzLayer = L.kmzLayer().addTo(map);
+                
+                kmzLayer.on('load', function(e) {
+                    var bounds = e.layer.getBounds();
+                    if (bounds && bounds.isValid()) {
+                        map.fitBounds(bounds);
+                    }
+                });
+
+                kmzLayer.on('error', function(e) {
+                    console.error('حدث خطأ أثناء تحميل ملف KMZ:', e);
+                    alert('تعذر تحميل ملف KMZ. تأكد من صحة الرابط أو اسم الملف.');
+                });
+                
+                kmzLayer.load(fileUrl);
+            } 
+            // ==========================================
+            // تنبيه في حال إدخال امتداد غير مدعوم
+            // ==========================================
+            else {
+                alert('صيغة الملف غير مدعومة! يرجى استخدام ملف بامتداد .kml أو .kmz');
+            }
         }
     </script>
 </body>
