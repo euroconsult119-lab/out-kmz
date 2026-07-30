@@ -39,7 +39,7 @@
             var fileUrl = "https://euroconsult119-lab.github.io/out-kmz/" + fileName;
             var lowerFileName = fileName.toLowerCase();
 
-            // دالة تصحيح ورسم نص الـ KML (بتعالج مشكلة LinearRing اليتيم)
+            // دالة تصحيح ورسم نص الـ KML مع معالجة الزووم التلقائي
             function parseAndRenderKML(kmlText) {
                 var fixedKmlText = kmlText
                     .replace(/<LinearRing>/g, '<Polygon><outerBoundaryIs><LinearRing>')
@@ -53,14 +53,26 @@
 
                 var layer = omnivore.kml.parse(fixedKmlText, null, customLayer)
                     .on('ready', function() {
-                        var bounds = this.getBounds();
-                        if (bounds && bounds.isValid()) {
-                            map.fitBounds(bounds);
-                        } else {
-                            alert("تم قراءة الملف ولكن لا توجد إحداثيات صالحة للرسم.");
-                        }
+                        // استخدام setTimeout لضمان اكتمال حساب حدود المعالم على الخريطة
+                        var self = this;
+                        setTimeout(function() {
+                            var bounds = self.getBounds();
+                            if (bounds && bounds.isValid()) {
+                                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+                            }
+                        }, 300);
                     })
                     .addTo(map);
+
+                // ضمان إضافي: في حال عدم التقاط حدث ready، يتم الزووم عند إضافة المعالم للطبقة
+                layer.on('layeradd', function() {
+                    setTimeout(function() {
+                        var bounds = layer.getBounds();
+                        if (bounds && bounds.isValid()) {
+                            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+                        }
+                    }, 400);
+                });
             }
 
             // ==========================================
@@ -79,7 +91,6 @@
             // 2. التعامل مع ملفات KMZ (القديمة + الجديدة)
             // ==========================================
             else if (lowerFileName.endsWith('.kmz')) {
-                // بنحمل الملف كـ Binary علشان نفكه ونصلحه لو مكتبة kmz العادية فشلت في رسمه
                 fetch(fileUrl)
                     .then(res => {
                         if (!res.ok) throw new Error("الملف غير موجود على السيرفر");
@@ -87,7 +98,6 @@
                     })
                     .then(buffer => JSZip.loadAsync(buffer))
                     .then(zip => {
-                        // البحث عن أول ملف امتداده .kml داخل الـ zip (مثل doc.kml أو غيره)
                         var kmlFilename = Object.keys(zip.files).find(name => name.toLowerCase().endsWith('.kml'));
                         if (!kmlFilename) {
                             throw new Error("ملف KMZ لا يحتوي على ملف KML داخله");
@@ -95,16 +105,18 @@
                         return zip.files[kmlFilename].async("string");
                     })
                     .then(kmlText => {
-                        // تمرير النص للدالة الذكية لتصحيحه ورسمه
                         parseAndRenderKML(kmlText);
                     })
                     .catch(err => {
                         console.error("JSZip failed, falling back to L.kmzLayer:", err);
-                        // خيار احتياطي للملفات القديمة جداً
                         var kmzLayer = L.kmzLayer().addTo(map);
                         kmzLayer.on('load', function(e) {
-                            var bounds = e.layer.getBounds();
-                            if (bounds && bounds.isValid()) map.fitBounds(bounds);
+                            setTimeout(function() {
+                                var bounds = e.layer.getBounds();
+                                if (bounds && bounds.isValid()) {
+                                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+                                }
+                            }, 300);
                         });
                         kmzLayer.load(fileUrl);
                     });
