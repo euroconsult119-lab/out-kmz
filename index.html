@@ -2,11 +2,10 @@
 <html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <title>KMZ Viewer (Free)</title>
+    <title>KML & KMZ Viewer</title>
     
-    <!-- استدعاء ملفات التنسيق لمكتبة Leaflet المجانية -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
     <style>
         html, body, #map { height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
     </style>
@@ -14,42 +13,80 @@
 <body>
     <div id="map"></div>
 
-    <!-- استدعاء مكتبة Leaflet الأساسية -->
+    <!-- 1. Leaflet -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- استدعاء مكتبة قراءة ملفات KMZ -->
+    <!-- 2. Leaflet-KMZ (للمعادلة القديمة الناجحة لملفات KMZ) -->
     <script src="https://unpkg.com/leaflet-kmz@latest/dist/leaflet-kmz.js"></script>
 
+    <!-- 3. Omnivore (لتصحيح وقراءة ملفات KML فقط) -->
+    <script src="https://unpkg.com/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
+
     <script>
-        // 1. إعداد الخريطة والمركز الافتراضي (مكة المكرمة)
         var map = L.map('map').setView([21.4225, 39.8261], 12);
 
-        // 2. إضافة طبقة الأقمار الصناعية المجانية (Esri World Imagery) - لا تحتاج API Key
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri'
         }).addTo(map);
 
-        // 3. قراءة اسم الملف من متغيرات الرابط
         var urlParams = new URLSearchParams(window.location.search);
         var fileName = urlParams.get('file');
 
         if (fileName) {
-            // تجميع الرابط الكامل للملف
-            var kmzUrl = "https://euroconsult119-lab.github.io/out-kmz/" + fileName;
+            var fileUrl = "https://euroconsult119-lab.github.io/out-kmz/" + fileName;
+            var lowerFileName = fileName.toLowerCase();
 
-            // 4. تحميل وعرض ملف الـ KMZ على الخريطة
-            var kmz = L.kmzLayer().addTo(map);
-            
-            kmz.on('load', function(e) {
-                var bounds = e.layer.getBounds();
-                if (bounds.isValid()) {
-                    // عمل Zoom تلقائي على حدود المشروع بمجرد تحميله
-                    map.fitBounds(bounds);
-                }
-            });
-            
-            // تنفيذ التحميل
-            kmz.load(kmzUrl);
+            // =========================================================
+            // 1. المعادلة القديمة الناجحة لجميع ملفات KMZ (بدون أي تغيير)
+            // =========================================================
+            if (lowerFileName.endsWith('.kmz')) {
+                var kmz = L.kmzLayer().addTo(map);
+                
+                kmz.on('load', function(e) {
+                    var bounds = e.layer.getBounds();
+                    if (bounds.isValid()) {
+                        // عمل Zoom تلقائي على حدود المشروع بمجرد تحميله
+                        map.fitBounds(bounds);
+                    }
+                });
+                
+                kmz.load(fileUrl);
+            }
+            // =========================================================
+            // 2. معالجة ملفات KML (تصحيح LinearRing + Zoom)
+            // =========================================================
+            else if (lowerFileName.endsWith('.kml')) {
+                fetch(fileUrl)
+                    .then(res => {
+                        if (!res.ok) throw new Error("الملف غير موجود");
+                        return res.text();
+                    })
+                    .then(kmlText => {
+                        // تصحيح وسم LinearRing لكي تظهر المضلعات
+                        var fixedKmlText = kmlText
+                            .replace(/<LinearRing>/g, '<Polygon><outerBoundaryIs><LinearRing>')
+                            .replace(/<\/LinearRing>/g, '</LinearRing></outerBoundaryIs></Polygon>');
+
+                        var customLayer = L.geoJson(null, {
+                            style: function () {
+                                return { color: '#0055ff', weight: 3, opacity: 1, fillOpacity: 0.3 };
+                            }
+                        });
+
+                        var kmlLayer = omnivore.kml.parse(fixedKmlText, null, customLayer)
+                            .on('ready', function() {
+                                var bounds = this.getBounds();
+                                if (bounds && bounds.isValid()) {
+                                    map.fitBounds(bounds);
+                                }
+                            })
+                            .addTo(map);
+                    })
+                    .catch(err => alert("خطأ في تحميل ملف KML: " + err.message));
+            } 
+            else {
+                alert("صيغة الملف غير مدعومة! يرجى استخدام .kml أو .kmz");
+            }
         }
     </script>
 </body>
