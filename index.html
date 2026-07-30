@@ -2,7 +2,7 @@
 <html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <title>KMZ Viewer (Free)</title>
+    <title>KML & KMZ Viewer (Free)</title>
     
     <!-- استدعاء ملفات التنسيق لمكتبة Leaflet المجانية -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -17,7 +17,7 @@
     <!-- استدعاء مكتبة Leaflet الأساسية -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- استدعاء مكتبة قراءة ملفات KMZ -->
+    <!-- استدعاء مكتبة قراءة ملفات KMZ و KML -->
     <script src="https://unpkg.com/leaflet-kmz@latest/dist/leaflet-kmz.js"></script>
 
     <script>
@@ -34,22 +34,27 @@
         var fileName = urlParams.get('file');
 
         if (fileName) {
-            // تجميع الرابط الكامل للملف
-            var kmzUrl = "https://euroconsult119-lab.github.io/out-kmz/" + fileName;
+            // تجميع الرابط الكامل للملف (يدعم KML و KMZ)
+            var fileUrl = "https://euroconsult119-lab.github.io/out-kmz/" + fileName;
 
-            // 4. تحميل وعرض ملف الـ KMZ على الخريطة
-            var kmz = L.kmzLayer().addTo(map);
+            // 4. إعداد طبقة العرض (تدعم كلاً من KML و KMZ تلقائياً)
+            var geoLayer = L.kmzLayer().addTo(map);
             
-            kmz.on('load', function(e) {
+            geoLayer.on('load', function(e) {
                 var bounds = e.layer.getBounds();
-                if (bounds.isValid()) {
+                if (bounds && bounds.isValid()) {
                     // عمل Zoom تلقائي على حدود المشروع بمجرد تحميله
                     map.fitBounds(bounds);
                 }
             });
+
+            // إضافة تنبيه في حال حدوث خطأ في تحميل الملف
+            geoLayer.on('error', function(e) {
+                console.error('حدث خطأ أثناء تحميل الملف:', e);
+            });
             
-            // تنفيذ التحميل
-            kmz.load(kmzUrl);
+            // تنفيذ التحميل (سواء كان الملف .kml أو .kmz)
+            geoLayer.load(fileUrl);
         }
     </script>
 </body>
