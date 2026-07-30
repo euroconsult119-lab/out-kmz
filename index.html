@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>KML & KMZ Viewer</title>
     
-    <!-- استدعاء ملفات التنسيق لمكتبة Leaflet -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
@@ -14,20 +14,20 @@
 <body>
     <div id="map"></div>
 
-    <!-- 1. مكتبة Leaflet الأساسية -->
+    <!-- 1. Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- 2. مكتبة قراءة ملفات KMZ -->
+    <!-- 2. مكتبة KMZ -->
     <script src="https://unpkg.com/leaflet-kmz@latest/dist/leaflet-kmz.js"></script>
 
-    <!-- 3. مكتبة leaflet-kml الحديثة والمباشرة لقراءة ملفات KML -->
-    <script src="https://unpkg.com/leaflet-kml@1.0.0/L.KML.js"></script>
+    <!-- 3. مكتبة Omnivore الأحدث -->
+    <script src="https://unpkg.com/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
 
     <script>
-        // إعداد الخريطة والمركز الافتراضي
+        // إعداد الخريطة والمركز الافتراضي (مكة المكرمة)
         var map = L.map('map').setView([21.4225, 39.8261], 12);
 
-        // إضافة طبقة الأقمار الصناعية (Esri World Imagery)
+        // طبقة الأقمار الصناعية (Esri World Imagery)
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri'
         }).addTo(map);
@@ -41,36 +41,38 @@
             var lowerFileName = fileName.toLowerCase();
 
             // ==========================================
-            // الحالة الأولى: ملفات KML (باستخدام Fetch و L.KML)
+            // التعامل مع ملفات KML عبر Omnivore + GeoJSON
             // ==========================================
             if (lowerFileName.endsWith('.kml')) {
-                fetch(fileUrl)
-                    .then(res => {
-                        if (!res.ok) throw new Error('تعذر الوصول للملف (تأكد من اسم الملف أو رفعه على GitHub)');
-                        return res.text();
-                    })
-                    .then(kmlText => {
-                        // تحويل النص إلى كائن XML
-                        var parser = new DOMParser();
-                        var kmlxml = parser.parseFromString(kmlText, 'text/xml');
-                        
-                        // إضافة طبقة KML للخريطة
-                        var track = new L.KML(kmlxml);
-                        map.addLayer(track);
-                        
-                        // ضبط الزووم تلقائياً على حدود الملف
-                        var bounds = track.getBounds();
+                // إنشاء طبقة GeoJSON مخصصة بستايل واضح (لون أحمر للخطوط والمضلعات)
+                var customLayer = L.geoJson(null, {
+                    style: function (feature) {
+                        return { color: '#ff0000', weight: 3, opacity: 0.9, fillOpacity: 0.3 };
+                    },
+                    pointToLayer: function (feature, latlng) {
+                        // في حال كان الملف يحتوي على نقاط، رسمها كعلامات واضحة
+                        return L.marker(latlng);
+                    }
+                });
+
+                // تحميل الـ KML وتحويله وضخه في الطبقة المخصصة
+                var kmlLayer = omnivore.kml(fileUrl, null, customLayer)
+                    .on('ready', function() {
+                        var bounds = this.getBounds();
                         if (bounds && bounds.isValid()) {
                             map.fitBounds(bounds);
+                        } else {
+                            alert('تم قراءة الملف ولكن لا توجد إحداثيات صالحة للرسم بداخله.');
                         }
                     })
-                    .catch(err => {
-                        console.error('خطأ في تحميل KML:', err);
-                        alert('حدث خطأ أثناء قراءة ملف KML: ' + err.message);
-                    });
+                    .on('error', function(e) {
+                        console.error('Omnivore Error:', e);
+                        alert('حدث خطأ أثناء تحميل ملف KML. تحقق من Console (F12) لمعرفة التفاصيل.');
+                    })
+                    .addTo(map);
             } 
             // ==========================================
-            // الحالة الثانية: ملفات KMZ
+            // التعامل مع ملفات KMZ
             // ==========================================
             else if (lowerFileName.endsWith('.kmz')) {
                 var kmzLayer = L.kmzLayer().addTo(map);
@@ -83,8 +85,8 @@
                 });
 
                 kmzLayer.on('error', function(e) {
-                    console.error('خطأ في تحميل KMZ:', e);
-                    alert('تعذر تحميل ملف KMZ.');
+                    console.error('KMZ Error:', e);
+                    alert('حدث خطأ أثناء تحميل ملف KMZ.');
                 });
                 
                 kmzLayer.load(fileUrl);
